@@ -1,0 +1,55 @@
+name: Update OpenAPI File
+
+on:
+  schedule:
+    # This runs every Friday at 9 or 10 am PST depending on Daylight Savings
+    - cron: '0 17 * * FRI'
+  workflow_dispatch: # This allows manual triggering
+
+jobs:
+  update-openapi:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v3
+      
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.x'
+
+    - name: Install dependencies
+      run: |
+        pip install deepdiff
+        pip install pyyaml
+      
+    # Download the new OpenAPI file to a temporary location
+    - name: Download OpenAPI file
+      run: curl -sSL https://insulator.conductor.one/api/v1/openapi.yaml -o openapi_new.yaml
+    
+    # Check if there are changes between the old and new versions
+    - name: Check if there are changes
+      id: check-changes
+      run: |
+        if diff -q openapi_new.yaml path/to/existing/openapi.yaml; then
+          echo "CHANGED=false" >> $GITHUB_ENV
+        else
+          echo "CHANGED=true" >> $GITHUB_ENV
+        fi
+    
+    # Generate release notes if there are changes
+    - name: Generate Release Notes if changed
+      if: env.CHANGED == 'true'
+      run: python .github/workflows/generate_release_notes.py
+    
+    # Create Pull Request if changed
+    - name: Create Pull Request if changed
+      if: env.CHANGED == 'true'
+      uses: peter-evans/create-pull-request@v3
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: 'Update openapi.yaml'
+        title: 'Update OpenAPI File'
+        body: 'This PR updates the openapi.yaml file to the latest version. Please make sure the release notes are correct.'
+        branch: 'update-openapi-file'
